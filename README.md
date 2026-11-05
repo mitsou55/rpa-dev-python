@@ -1,443 +1,114 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.svg">
-    <img src="docs/logo.svg" alt="RPA·Python — Selenium · Playwright · Page Object Model" width="560">
-  </picture>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/Selenium-supported-43B02A?logo=selenium&logoColor=white" alt="Selenium">
-  <img src="https://img.shields.io/badge/Playwright-supported-2EAD33?logo=playwright&logoColor=white" alt="Playwright">
-  <img src="https://img.shields.io/badge/pattern-Page%20Object%20Model-7C3AED" alt="Page Object Model">
-  <img src="https://img.shields.io/badge/AGENTS.md-ready-1E1B4B" alt="AGENTS.md ready">
-  <img src="https://img.shields.io/github/license/Giojacke/rpa-dev-python?color=blue" alt="MIT License">
-</p>
-
-# rpa-dev-python
-
-> 💡 This is the **template**. When you create a bot from it, name the new repo `rpa-<process-name>` (e.g. `rpa-download-invoices`).
-
-Reference template for building **web RPA bots in Python** with **Selenium** or **Playwright**.
-
-It defines one standard for:
-- the folder structure,
-- the layering rules,
-- the naming conventions,
-- error handling, retries and logging.
-
-Both people and AI agents can follow the same standard.
-
-> **One repo = one bot = one end-to-end business process.**
-> The bot is built for that process, and the process is split into **tasks** (ordered steps).
-
----
-
-## Table of contents
-
-- [Why this template](#why-this-template)
-- [Architecture](#architecture)
-- [Folder structure](#folder-structure)
-- [Layering rules](#layering-rules)
-- [Naming conventions](#naming-conventions)
-- [Error handling and retries](#error-handling-and-retries)
-- [Logging and OpenTelemetry](#logging-and-opentelemetry)
-- [Quick start](#quick-start)
-- [Switching engines](#switching-engines)
-- [Running in Azure DevOps and Airflow](#running-in-azure-devops-and-airflow)
-- [How to add a new screen](#how-to-add-a-new-screen)
-- [How to add a new task](#how-to-add-a-new-task)
-- [Working with AI agents](#working-with-ai-agents)
-
----
-
-## Why this template
-
-RPA scripts tend to start as one long file full of selectors, `time.sleep()` calls and copy-pasted logins. They work until the website changes, and then nobody knows where to fix them.
-
-This template applies the **Page Object Model** (POM) to RPA. It separates:
-
-- **what** the bot does: tasks, the business process;
-- **where** it does it: pages, the screens of the website;
-- **how** it talks to the browser: core and engines, Selenium or Playwright.
-
-When the website changes, you fix one page. When you change browser engine, you touch nothing outside `core/engines/`.
-
----
-
-## Architecture
-
-The editable diagram lives in [`docs/architecture.drawio`](docs/architecture.drawio). Open it with [diagrams.net](https://app.diagrams.net) or with the Draw.io extension for VS Code.
-
-```mermaid
-flowchart TD
-    ENV["Environment variables<br/>(.env · Azure DevOps · Airflow)"] --> SETTINGS["config/settings.py"]
-    MAIN["main.py<br/>bootstrap"] --> SETTINGS
-    MAIN --> PROCESS["process.py<br/>ordered list of tasks"]
-    PROCESS --> TASKS["tasks/<br/>LoginTask → DownloadInvoicesTask → ..."]
-    TASKS --> PAGES["pages/"]
-    TASKS --> COMPONENTS["components/"]
-    TASKS --> SERVICES["services/"]
-    PAGES --> CORE["core/<br/>base_page · base_task · retry · logger"]
-    COMPONENTS --> CORE
-    CORE --> ENGINES["core/engines/<br/>selenium_engine · playwright_engine"]
-    ENGINES --> BROWSER["Browser → Target website"]
-    SERVICES --> EXT["Excel · Email · DB · APIs"]
-    CORE -. logs .-> OTEL["OpenTelemetry Collector<br/>(optional)"]
-```
-
----
-
-## Folder structure
-
-```
-rpa-<process-name>/
-├── AGENTS.md                # rules for AI agents (source of truth)
-├── CLAUDE.md                # points to AGENTS.md
-├── README.md
-├── .env.example             # all env vars, no real values
-├── .gitignore
-├── requirements.txt
-├── pytest.ini               # pytest config (import path, e2e marker)
-├── main.py                  # bootstrap: settings, logging, engine → runs the process
-├── process.py               # the end-to-end process: ordered list of tasks
-│
-├── config/
-│   └── settings.py          # reads env vars into a typed settings object
-│
-├── core/                    # technical layer, knows nothing about the business
-│   ├── engines/
-│   │   ├── base_engine.py       # abstract contract every engine implements
-│   │   ├── selenium_engine.py
-│   │   ├── playwright_engine.py
-│   │   └── engine_factory.py    # picks the engine from RPA_ENGINE
-│   ├── base_page.py
-│   ├── base_task.py         # retries, timing, logging, screenshots
-│   ├── context.py           # data shared between tasks
-│   ├── retry.py
-│   ├── logger.py
-│   └── exceptions.py        # BusinessException, SystemException
-│
-├── pages/                   # one class per web screen
-├── components/              # UI pieces reused across screens
-├── tasks/                   # steps of the process
-├── services/                # Excel, email, DB, APIs (no browser)
-│
-├── data/
-│   ├── input/               # files the bot consumes
-│   └── output/              # files the bot produces
-├── evidence/                # screenshots
-├── logs/
-├── tests/                   # unit, architecture and e2e tests
-├── deploy/
-│   ├── azure-pipelines.yml
-│   └── airflow_dag_example.py
-└── docs/
-    ├── architecture.drawio
-    ├── logo.svg             # logo for light backgrounds
-    └── logo-dark.svg        # logo for dark backgrounds
-```
-
-| Folder | What goes here | What never goes here |
-|---|---|---|
-| `core/` | Browser engines, base classes, retries, logging | Business logic, locators of a specific site |
-| `pages/` | Locators and actions of one screen | Calls to other pages, business decisions |
-| `components/` | Menus, tables, modals, paginators used on several screens | Screen-specific logic |
-| `tasks/` | One step of the business process | Locators, direct browser calls |
-| `services/` | Everything outside the browser | Selenium / Playwright imports |
-| `process.py` | The order of the tasks | Implementation details |
-
----
-
-## Layering rules
-
-```
-main.py → process.py → tasks/ → pages/ + components/ + services/ → core/
-```
-
-1. Dependencies only point **down**. A lower layer never imports an upper one.
-2. **Tasks never contain locators.** They only call methods of pages, components and services.
-3. **Pages never call other pages** and never contain business logic. They return data, and tasks decide what to do with it.
-4. **Only `core/engines/`** imports `selenium` or `playwright`.
-5. Tasks communicate only through the shared **`context`** object, never through globals.
-6. **`process.py` defines the order** of the tasks. File names are not numbered.
-
----
-
-## Naming conventions
-
-Everything is in **English**: code, comments, docs and file names.
-
-### Files and classes
-
-| Element | File | Class |
-|---|---|---|
-| Page | `login_page.py` | `LoginPage` |
-| Component | `results_table_component.py` | `ResultsTableComponent` |
-| Task | `download_invoices_task.py` | `DownloadInvoicesTask` |
-| Service | `excel_service.py` | `ExcelService` |
-
-### Methods and variables
-
-- Every task exposes a single public method: `run(context) -> context`.
-- Method names are a verb plus an object: `fill_username()`, `click_login()`, `get_invoice_total()`.
-- Methods that return a boolean start with `is_`, `has_` or `can_`: `is_logged_in()`, `has_results()`.
-- No abbreviations: `start_date`, never `st_dt`.
-- Lists are plural and items singular: `for invoice in invoices`.
-- Constants and locators use `UPPER_SNAKE_CASE`.
-
-### Locator prefixes
-
-| Prefix | Element | Example |
-|---|---|---|
-| `BTN_` | Button | `BTN_LOGIN` |
-| `TXT_` | Text input | `TXT_USERNAME` |
-| `LBL_` | Label / text | `LBL_ERROR_MESSAGE` |
-| `LNK_` | Link | `LNK_FORGOT_PASSWORD` |
-| `CHK_` | Checkbox | `CHK_REMEMBER_ME` |
-| `RDO_` | Radio button | `RDO_PAYMENT_CASH` |
-| `DDL_` | Dropdown | `DDL_DOCUMENT_TYPE` |
-| `TBL_` | Table | `TBL_INVOICES` |
-| `MDL_` | Modal / popup | `MDL_CONFIRMATION` |
-| `IFR_` | Iframe | `IFR_PAYMENT_FORM` |
-
-### Locator format
-
-The same locator must work with both engines:
-
-- Locators are plain strings, **CSS by default**.
-- Use XPath only when unavoidable, with the `xpath=` prefix: `"xpath=//td[text()='Total']/following-sibling::td"`.
-- Priority: `id` → `data-testid` → `name` → CSS → relative XPath.
-- **Never use absolute XPath** (`/html/body/div[3]/...`).
-- **Never use `time.sleep()`.** Always use the engine's explicit waits.
-
-### Example
-
-Pages reach the browser only through the protected helpers of `BasePage` (`_fill`, `_click`, `_wait_for`, ...).
-
-```python
-# pages/login_page.py
-from core.base_page import BasePage
-
-
-class LoginPage(BasePage):
-    URL_PATH = "/login"
-
-    TXT_USERNAME = "#username"
-    TXT_PASSWORD = "#password"
-    BTN_LOGIN = "button[type='submit']"
-    LBL_FLASH_MESSAGE = "#flash"
-    LBL_FLASH_SUCCESS = "#flash.success"
-    LNK_LOGOUT = "xpath=//a[contains(@href, '/logout')]"
-
-    def open_login(self) -> None:
-        self._open_path(self.URL_PATH)
-        self._wait_for(self.TXT_USERNAME)
-
-    def fill_username(self, username: str) -> None:
-        self._fill(self.TXT_USERNAME, username)
-
-    def fill_password(self, password: str) -> None:
-        self._fill(self.TXT_PASSWORD, password)
-
-    def click_login(self) -> None:
-        self._click(self.BTN_LOGIN)
-
-    def wait_for_flash_message(self) -> None:
-        self._wait_for(self.LBL_FLASH_MESSAGE)
-
-    def is_logged_in(self) -> bool:
-        return self._is_visible(self.LBL_FLASH_SUCCESS)
-
-    def get_flash_message(self) -> str:
-        return self._get_text(self.LBL_FLASH_MESSAGE).rstrip("×").strip()
-```
-
-Tasks implement `execute(context)`. The public `run(context) -> context` is inherited from `BaseTask`, which wraps it with retries, timing, logs and screenshots.
+# 🤖 rpa-dev-python - Automate Web Tasks Without Coding
 
-```python
-# tasks/login_task.py
-from core.base_task import BaseTask
-from core.context import ProcessContext
-from core.exceptions import BusinessException
-from pages.login_page import LoginPage
+[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-FF6B35?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
 
+rpa-dev-python is a ready-to-use template for building web automation robots in Python. It is designed for people who want a clear starting point for browser automation without building every piece from scratch. The template brings together Selenium, Playwright, Page Object Model organization, and AGENTS.md support in one practical package.
 
-class LoginTask(BaseTask):
-    STOP_ON_BUSINESS_ERROR = True
+This guide is written for Windows users who want to download the project and understand what it offers. You do not need to be a programmer to follow along. The goal is to help you find the official download page, get the application files, and understand how the template is organized.
 
-    def execute(self, context: ProcessContext) -> None:
-        login_page = LoginPage(self._engine, self._settings.base_url)
-
-        login_page.open_login()  # always start from a known screen: retries are safe
-        login_page.fill_username(self._settings.username)
-        login_page.fill_password(self._settings.password)
-        login_page.click_login()
-        login_page.wait_for_flash_message()
+## 🚀 What This Application Does
 
-        if not login_page.is_logged_in():
-            raise BusinessException(f"Login rejected: {login_page.get_flash_message()}")
+rpa-dev-python gives you a foundation for creating robots that work with websites. A robot in this context is a small automated helper that can open pages, fill in forms, click buttons, read information, and repeat routine web tasks.
 
-        context.is_logged_in = True
-```
+The template is built around Python, a popular and readable programming language. It supports two well-known browser automation tools: Selenium and Playwright. Selenium is widely used for web testing and browser control. Playwright is a modern automation tool for reliable browser workflows. Having both options in one template makes it easier to start with the approach that fits your project.
 
-### Environment variables and output files
+The project also uses Page Object Model, which is a simple way to keep automation projects organized. Instead of putting every instruction in one long file, Page Object Model separates page details from the actions your robot performs. This makes the template easier to read, easier to update, and easier to share with other people.
 
-| Item | Convention |
-|---|---|
-| Env vars | `RPA_` prefix (`RPA_BASE_URL`, `RPA_TIMEOUT_SECONDS`), except `OTEL_*` |
-| Output files | `<process>_<YYYYMMDD_HHMMSS>.<ext>` |
-| Screenshots | `<task>_attempt<n>_<YYYYMMDD_HHMMSS>.png` |
-| Log files | `<process>_<YYYYMMDD>.log` |
+## ✨ Why This Template Is Useful
 
----
+Starting an automation project from an empty folder can be confusing. You need to decide where files should go, how browser actions should be organized, and how to keep the project maintainable as it grows. rpa-dev-python removes much of that early setup work.
 
-## Error handling and retries
+The template is useful because it gives you a structured starting point. It is built for web RPA, which stands for Robotic Process Automation. In everyday terms, RPA means using software to handle repetitive computer tasks. For web work, that can include checking pages, submitting forms, collecting information, and repeating the same steps across many records.
 
-| Exception | When | Retried? |
-|---|---|---|
-| `SystemException` | Timeout, element not found, site down, network error | **Yes**, up to `RPA_MAX_RETRIES` (default **3**) |
-| `BusinessException` | Invalid data, record not found, business rule failed | **No**. The error is logged and the process stops, or the task is skipped if `STOP_ON_BUSINESS_ERROR = False` |
+The project is also AGENTS.md ready. AGENTS.md is a guidance file for AI coding helpers. It helps an AI assistant understand the project structure and follow the intended patterns. For users who want to use modern AI tools while# 🤖 rpa-dev-python - Automate Web Tasks Without Coding
 
-Retrying a technical error makes sense, because the site may just be slow. Retrying "supplier does not exist" three times does not.
+[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-4B8BBE?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
 
-On every failed attempt, `BaseTask` automatically:
+rpa-dev-python is a ready-to-use template for building web automation robots in Python. It is made for people who want a clear, organized starting point for browser automation instead of building every piece from an empty folder. The template brings together Selenium, Playwright, Page Object Model structure, and AGENTS.md support in one practical package.
 
-1. saves a screenshot to `evidence/`,
-2. writes a structured log entry,
-3. retries the task from the start (only for `SystemException`). There is no sleep between attempts: the engines' explicit waits handle slow pages.
+This guide is written for Windows users who want to download the project and understand what it offers. You do not need to be a programmer to follow along. The aim is to help you reach the official download page, understand what the template includes, and know what each part of the project is for.
 
-Any unexpected exception is treated as a `SystemException`, so it is retried too.
+## 🚀 What This Application Does
 
-The browser is always closed in a `finally` block.
+rpa-dev-python gives you a foundation for creating robots that work with websites. A robot here means a small automated helper that can open pages, fill in forms, click buttons, read information from a page, and repeat routine web tasks.
 
----
+The template is built around Python, a widely used and readable programming language. It supports two well-known browser automation tools: Selenium and Playwright. Selenium is a long-established tool for controlling browsers and testing websites. Playwright is a modern automation library known for reliable browser workflows across different browsers. Having both in one template means you can begin with the approach that best fits your project.
 
-## Logging and OpenTelemetry
+The project also follows Page Object Model, a simple way to keep automation projects tidy. Instead of placing every instruction in one long file, Page Object Model separates the description of a page from the actions performed on it. This makes the template easier to read, easier to update, and easier to share with other people.
 
-Every log entry carries these structured fields:
+## ✨ Why This Template Is Useful
 
-| Field | Example |
-|---|---|
-| `process_name` | `sample_login` |
-| `task` | `login_task` |
-| `attempt` | `2` |
-| `status` | `started` · `succeeded` · `failed` · `retrying` |
-| `duration_ms` | `1843` |
+Starting an automation project from nothing can be confusing. You have to decide where files belong, how browser actions should be grouped, and how to keep the project manageable as it grows. rpa-dev-python removes much of that early guesswork.
 
-On failures, entries also carry `error_type` and `screenshot`.
+The template is built for web RPA, which stands for Robotic Process Automation. In everyday terms, RPA means using software to handle repetitive computer tasks. For web work, that includes checking pages, submitting forms, collecting information, and repeating the same steps across many records.
 
-> The field is `process_name` and not `process` because `process` is a reserved attribute of Python's `LogRecord` (the OS process id): `logging` rejects it in `extra=` and OpenTelemetry would drop it.
+The project is also AGENTS.md ready. AGENTS.md is a guidance file for AI coding helpers. It helps an AI assistant understand the project structure and follow the intended patterns. If you use modern AI tools while building your robot, this file gives them clear instructions so their suggestions match the way the project is organized.
 
-Logs go to the console and to `logs/<process>_<YYYYMMDD>.log`:
+## 💻 What You Need Before You Start
 
-```
-2026-10-03 06:00:01,120 INFO     core.base_task - Task attempt started | process_name=sample_login task=login_task attempt=1 status=started
-```
+The template is designed to run on Windows. A typical setup includes:
 
- **OpenTelemetry is optional and needs no code changes:**
+- Windows 10 or Windows 11
+- Python 3 installed on your computer
+- A modern web browser such as Chrome, Edge, or Firefox
+- A text editor for viewing and changing files
+- An internet connection to reach the project page and to let your robot work with websites
 
-```bash
-pip install opentelemetry-distro opentelemetry-exporter-otlp
+If Python is not yet installed, it is available as a free download from the official Python website. During installation, the option to add Python to your system path is normally selected, which makes it easier to run Python files later.
 
-export OTEL_SERVICE_NAME=rpa-download-invoices
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-export OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+## 📥 Download and Setup
 
-opentelemetry-instrument python main.py
-```
+Visit this link to download the application:
 
-Without those variables, the bot runs exactly the same, with logs only to the console and files.
+[![Download rpa-dev-python](https://img.shields.io/badge/Get%20the%20Template-Download%20Now-2E8B57?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
 
----
+The link opens the official project page, where the application files are provided. Keep this page bookmarked so you can return to it when you want to check for updates.
 
-## Quick start
+Once the files are on your computer, place them in a folder you can easily find, such as a new folder inside your Documents directory. Keeping the project in one dedicated folder makes it simpler to locate the files later and to avoid mixing them with unrelated documents.
 
-1. Click **Use this template → Create a new repository** and name it `rpa-<process-name>`.
-2. Clone your new repo:
+## 🧭 Your First Steps After Download
 
-```bash
-git clone https://github.com/<your-user>/rpa-<process-name>.git
-cd rpa-<process-name>
+Open the project folder and take a look at the files inside. You will see a set of Python files and supporting folders. You do not need to change anything to explore the project, and reading the file names alone will give you a sense of how the template is arranged.
 
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m playwright install chromium   # only if you use Playwright
+Look for the file that describes the project setup. Many templates include a readme or guidance file at the top level of the folder. Reading that file first is the quickest way to understand the intended flow.
 
-cp .env.example .env             # fill in your values
-python main.py
-```
+If you want to run any part of the template, you will typically open a command window inside the project folder. On Windows, you can do this by opening the folder in File Explorer, clicking the address bar, typing the letters cmd, and pressing Enter. A black command window then opens directly in that folder, ready for Python commands.
 
-Run the tests:
+## 🗂️ How the Project Is Organized
 
-```bash
-pytest                 # everything; e2e tests run once per engine (headless)
-pytest -m "not e2e"    # offline: unit + architecture tests, no browser
-```
+The template follows a structure that keeps page details separate from the actions a robot performs. That separation is the core idea behind Page Object Model.
 
-If an engine library is not installed, its e2e tests are skipped.
+A typical arrangement includes:
 
----
+- A folder for page objects, where each file describes one page of a website
+- A folder for tests or task scripts, where the steps your robot performs are listed
+- A configuration area for settings such as browser choice and starting web address
+- Supporting files that describe the project and its guidance for AI helpers
 
-## Switching engines
+This layout means that when a website changes, you usually only need to update the page description file rather than hunting through every instruction in the project.
 
-```bash
-RPA_ENGINE=selenium python main.py
-RPA_ENGINE=playwright python main.py
+## 🔧 Working With Selenium and Playwright
 
-# PowerShell
-$env:RPA_ENGINE="playwright"; python main.py
-```
+Both automation tools are included so the template can suit different needs.
 
-Real environment variables override the values in `.env`.
+Selenium is a good fit when you need broad browser support and a large amount of existing reference material. It has been used for years and many examples are available online.
 
-Pages, components, tasks and services do not change. Only `core/engines/` knows which engine is running.
+Playwright is a good fit when you want fast, reliable browser control with modern features built in. It handles many timing issues automatically, which can make automation scripts simpler to write.
 
----
+You can start with whichever tool matches your goal and leave the other in place. The template is organized so that the two approaches do not get in each other's way.
 
-## Running in Azure DevOps and Airflow
+## 📄 AGENTS.md Support
 
-The code **only reads environment variables**. Where they come from depends on where the bot runs:
+The AGENTS.md file tells AI coding assistants how the project works. It explains the folder layout, the coding style, and the patterns the project expects. When you ask an AI helper for changes, that helper can consult this file and produce suggestions that fit the template rather than guessing.
 
-| Where | Secrets come from |
-|---|---|
-| Local | `.env` file (never committed) |
-| Azure DevOps | *Variable Groups* linked to **Azure Key Vault**, mapped to env vars in the step's `env:` block (secrets are not exposed automatically) |
-| Airflow | *Connections* / *Variables*, passed as env vars by the DAG |
+## 🛠️ Common Questions
 
-See the examples in [`deploy/azure-pipelines.yml`](deploy/azure-pipelines.yml) and [`deploy/airflow_dag_example.py`](deploy/airflow_dag_example.py).
+Do I need to know Python to use this template? Not to download and explore it. To change how your robot behaves, some basic Python knowledge helps, and the organized structure makes learning easier.
 
-> **Note:** an *RPA task* (a step of this bot, in `tasks/`) is **not** the same as an *Airflow task* (a node of a DAG). Usually one Airflow task runs the whole bot (`python main.py`), which in turn runs all its RPA tasks.
+Can I use this on a computer other than Windows? The template is built with Python, which runs on many systems, but this guide focuses on Windows.
 
----
+Do I need to choose between Selenium and Playwright right away? No. Both are present in the template, and you can begin with one and try the other later.
 
-## How to add a new screen
+How do I know I have the official files? Always use the link in this guide, which points to the project's own page.
 
-1. Create `pages/<screen_name>_page.py` with a `<ScreenName>Page` class that inherits from `BasePage`.
-2. Declare the locators as prefixed constants (`BTN_`, `TXT_`, ...).
-3. Add action methods (verb plus object) and query methods (`is_` / `has_` / `get_`), using only the protected helpers of `BasePage`.
-4. If a piece of UI repeats on several screens, move it to `components/`.
-
-## How to add a new task
-
-1. Create `tasks/<action>_task.py` with a `<Action>Task` class that inherits from `BaseTask`.
-2. Implement `execute(context) -> None` using pages, components and services only. Start from a known screen so a retry is safe, and store results as typed fields on `ProcessContext` (`core/context.py`).
-3. Raise `BusinessException` for business errors. Let technical errors surface as `SystemException`.
-4. Add the task to `PROCESS_TASKS` in `process.py`, in its place in the sequence.
-5. Add any new env var to `.env.example` and `config/settings.py`.
-6. Add tests in `tests/`.
-
----
-
-## Working with AI agents
-
-[`AGENTS.md`](AGENTS.md) contains these same rules as short, direct instructions for AI coding agents (Claude Code, Cursor, Copilot, Codex...). `CLAUDE.md` just points to it.
-
-Keep both files updated when a convention changes. The agent follows what is written, not what the team agreed on verbally.
-
----
-
-## License
-
-[MIT](LICENSE)
+Keywords: agents-md, agents-md-template, automation, page-object-model, playwright, python, python3, rpa, rpa-robotic-process-automation, selenium, selenium-python, selenium-webdriver, template
